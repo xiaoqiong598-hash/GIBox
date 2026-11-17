@@ -1,0 +1,38 @@
+name: Build side-by-side 1.0.18
+on: [workflow_dispatch]
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.7.1'
+      - run: sdkmanager 'ndk;27.2.12479018' 'cmake;3.22.1'
+      - name: Rename package so it installs beside GIBox 1.0.0
+        run: |
+          sed -i 's|applicationId = "com.gibox.tool"|applicationId = "com.gibox.tool.v18"|' app/build.gradle.kts
+          sed -i 's|com.gibox.tool.documents|com.gibox.tool.v18.documents|g' app/src/main/AndroidManifest.xml app/src/main/java/com/gibox/tool/DirectoryProvider.java
+          grep -n 'applicationId' app/build.gradle.kts
+      - run: gradle --no-daemon :app:assembleDebug
+      - name: Collect
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/GIBox-1.0.18-v18.apk"
+          echo "APK=$RUNNER_TEMP/GIBox-1.0.18-v18.apk" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.APK }}
+          archive: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create v1.0.18-v18 "$APK" --title "GIBox 1.0.18 side-by-side" --notes "包名 com.gibox.tool.v18，可与官方 1.0.0 共存；同一时间只启用一个模块。"
